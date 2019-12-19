@@ -834,7 +834,10 @@ _epeg_open_header(Epeg_Image *im)
 
    im->color_space = ((im->in.color_space = im->in.jinfo.out_color_space) == JCS_GRAYSCALE) ? EPEG_GRAY8 : EPEG_RGB8;
    if (im->in.color_space == JCS_CMYK) im->color_space = EPEG_CMYK;
-   
+
+   /* Will be set if orientation is present in EXIF data */
+   im->in.orientation = 0;
+
    for (m = im->in.jinfo.marker_list; m; m = m->next)
      {
 	if (m->marker == JPEG_COM)
@@ -886,7 +889,6 @@ _epeg_open_header(Epeg_Image *im)
 	    *	store it in im->in.orientation. Later, this will
 	    *	be written to the output jpeg Exif data.
 	    */
-            im->in.orientation = 0;
             ExifData *ed = exif_data_new_from_data(m->data, m->data_length);
             if (ed) {
              	exif_byte_order = exif_data_get_byte_order(ed);
@@ -1120,13 +1122,12 @@ _epeg_decode_for_trim(Epeg_Image *im)
 static int
 _epeg_trim(Epeg_Image *im)
 {
-   int            y, a, b, w, h;
+   int            y, a, b, h;
    
    if ((im->in.w == im->out.w) && (im->in.h == im->out.h)) return 1;
    if (im->scaled) return 1;
    
    im->scaled = 1;
-   w = im->out.w;
    h = im->out.h;
    a = im->out.x;
    b = im->out.y;
@@ -1248,11 +1249,12 @@ _epeg_encode(Epeg_Image *im)
         exif_entry_unref(entry);
    }
    /* Write Exif data to output jpeg file */
-   unsigned char *exif_data;
+   unsigned char *exif_data = NULL;
    unsigned int exif_data_len;
    exif_data_save_data(exif, &exif_data, &exif_data_len);
    jpeg_write_marker(&(im->out.jinfo), JPEG_APP0 + 1, exif_data, exif_data_len);
    exif_data_unref(exif);
+   free(exif_data);
 
    /* Output comment if there is one */
    if (im->out.comment && *im->out.comment)
